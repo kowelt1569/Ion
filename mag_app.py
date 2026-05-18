@@ -75,7 +75,7 @@ if "metrics" not in st.session_state:
 #  САЙДБАР (Панель керування)
 # ══════════════════════════════════════════════════════════
 with st.sidebar:
-    st.title("🌿 MagnetModel Pro")
+    st.title("🌿 MagneticIE Pro")
     st.caption("Ridge Regression Engine · Магнітна активація")
     st.markdown("---")
     
