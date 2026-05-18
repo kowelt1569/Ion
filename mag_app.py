@@ -81,7 +81,7 @@ with st.sidebar:
     
     # Секція 1: Введення даних вручну
     st.subheader("⬡ Введення даних")
-    inp_x1 = st.number_input("X₁ — Витрата", value=0.0, step=0.1, format="%.4f")
+    inp_x1 = st.number_input("X₁ — Концентрація", value=0.0, step=0.1, format="%.4f")
     inp_x2 = st.number_input("X₂ — Напруженість", value=0.0, step=1.0, format="%.4f")
     inp_y  = st.number_input("Y — Вихідний параметр (для навч.)", value=0.0, step=0.1, format="%.4f")
     
