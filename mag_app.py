@@ -113,25 +113,32 @@ with st.sidebar:
             st.error(f"Помилка читання файлу: {e}")
 
     # Секція 3: Керування моделлю
+    # Секція 3: Керування моделлю
     st.subheader("⚙️ Модель")
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
         if len(st.session_state.train_df) < 6:
             st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {len(st.session_state.train_df)})")
         else:
-            x1 = st.session_state.train_df["X1"].to_numpy()
-            x2 = st.session_state.train_df["X2"].to_numpy()
-            y  = st.session_state.train_df["Y"].to_numpy()
-            
-            A = _design_matrix(x1, x2)
-            c = ridge_regression(A, y, alpha=0.01)
-            yp, res, r2, rmse = evaluate_model(x1, x2, y, c)
-            
-            st.session_state.coeffs = c
-            st.session_state.metrics["R2"] = f"{r2:.4f}"
-            st.session_state.metrics["RMSE"] = f"{rmse:.4f}"
-            st.success("Модель успішно навчено!")
-            st.rerun()
-
+            # 🌟 ВИПРАВЛЕННЯ: Примусово конвертуємо дані в числовий тип float64
+            try:
+                x1 = pd.to_numeric(st.session_state.train_df["X1"]).to_numpy(dtype=np.float64)
+                x2 = pd.to_numeric(st.session_state.train_df["X2"]).to_numpy(dtype=np.float64)
+                y  = pd.to_numeric(st.session_state.train_df["Y"]).to_numpy(dtype=np.float64)
+                
+                A = _design_matrix(x1, x2)
+                c = ridge_regression(A, y, alpha=0.01)
+                yp, res, r2, rmse = evaluate_model(x1, x2, y, c)
+                
+                st.session_state.coeffs = c
+                st.session_state.metrics["R2"] = f"{r2:.4f}"
+                st.session_state.metrics["RMSE"] = f"{rmse:.4f}"
+                st.success("Модель успішно навчено!")
+                st.rerun()
+            except ValueError as e:
+                st.error("Помилка даних: Перевірте, чи таблиця не містить тексту або порожніх клітинок!")
+            except Exception as e:
+                st.error(f"Помилка лінійної алгебри: {e}")
+                
     # Секція 4: Прогноз
     st.subheader("◎ Прогноз")
     if st.button("🔮 Зробити прогноз", use_container_width=True):
