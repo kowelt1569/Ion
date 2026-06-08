@@ -38,13 +38,13 @@ def ridge_regression(A: np.ndarray, y: np.ndarray, alpha: float = 0.01) -> np.nd
 
 def evaluate_model(x1, x2, y_true, coeffs):
     """Оцінка моделі — R² та RMSE."""
-    A        = _design_matrix(x1, x2)
-    y_pred   = A @ coeffs
+    A         = _design_matrix(x1, x2)
+    y_pred    = A @ coeffs
     residuals = y_true - y_pred
-    ss_res   = np.sum(residuals**2)
-    ss_tot   = np.sum((y_true - np.mean(y_true))**2)
-    r2       = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
-    rmse     = np.sqrt(np.mean(residuals**2))
+    ss_res    = np.sum(residuals**2)
+    ss_tot    = np.sum((y_true - np.mean(y_true))**2)
+    r2        = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    rmse      = np.sqrt(np.mean(residuals**2))
     return y_pred, residuals, r2, rmse
 
 def calculate_Y_physical(x1: float, x2: float, coeffs: np.ndarray) -> float:
@@ -59,17 +59,42 @@ def calculate_Y_physical(x1: float, x2: float, coeffs: np.ndarray) -> float:
         F6
     )
 
-def to_float_array(series: pd.Series) -> np.ndarray:
-    """Безпечна конвертація серії в float64."""
-    return pd.to_numeric(series, errors='raise').to_numpy(dtype=np.float64)
+def _make_empty_train_df() -> pd.DataFrame:
+    """DataFrame з явними float64-типами — уникає деградації до object при concat."""
+    return pd.DataFrame({
+        "X1": pd.Series(dtype=np.float64),
+        "X2": pd.Series(dtype=np.float64),
+        "Y":  pd.Series(dtype=np.float64),
+    })
+
+def _make_empty_pred_df() -> pd.DataFrame:
+    return pd.DataFrame({
+        "X1":          pd.Series(dtype=np.float64),
+        "X2":          pd.Series(dtype=np.float64),
+        "Y_predicted": pd.Series(dtype=np.float64),
+    })
+
+def _safe_concat(base: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
+    """concat з примусовим збереженням float64-типів."""
+    result = pd.concat([base, new], ignore_index=True)
+    for col in base.columns:
+        result[col] = pd.to_numeric(result[col], errors='coerce')
+    return result
+
+def _to_float64(df: pd.DataFrame, cols) -> tuple:
+    """Повертає numpy float64-масиви для вказаних колонок."""
+    arrays = []
+    for col in cols:
+        arrays.append(pd.to_numeric(df[col], errors='raise').to_numpy(dtype=np.float64))
+    return tuple(arrays)
 
 # ══════════════════════════════════════════════════════════
 #  ЗБЕРЕЖЕННЯ СТАНУ ЗАСТОСУНКУ
 # ══════════════════════════════════════════════════════════
 if "train_df" not in st.session_state:
-    st.session_state.train_df = pd.DataFrame(columns=["X1", "X2", "Y"])
+    st.session_state.train_df = _make_empty_train_df()
 if "pred_df" not in st.session_state:
-    st.session_state.pred_df = pd.DataFrame(columns=["X1", "X2", "Y_predicted"])
+    st.session_state.pred_df = _make_empty_pred_df()
 if "coeffs" not in st.session_state:
     st.session_state.coeffs = None
 if "metrics" not in st.session_state:
@@ -85,15 +110,17 @@ with st.sidebar:
 
     # Секція 1: Введення даних вручну
     st.subheader("⬡ Введення даних")
-    inp_x1 = st.number_input("X₁ — Концентрація", value=0.0, step=0.1, format="%.4f")
-    inp_x2 = st.number_input("X₂ — Напруженість", value=0.0, step=1.0, format="%.4f")
+    inp_x1 = st.number_input("X₁ — Концентрація",      value=0.0, step=0.1,  format="%.4f")
+    inp_x2 = st.number_input("X₂ — Напруженість",       value=0.0, step=10.0, format="%.2f")
     inp_y  = st.number_input("Y — Вихідний параметр (для навч.)", value=0.0, step=0.1, format="%.4f")
 
     if st.button("➕ Додати рядок до навчання", use_container_width=True):
-        new_row = pd.DataFrame([{"X1": float(inp_x1), "X2": float(inp_x2), "Y": float(inp_y)}])
-        st.session_state.train_df = pd.concat(
-            [st.session_state.train_df, new_row], ignore_index=True
-        )
+        new_row = pd.DataFrame([{
+            "X1": float(inp_x1),
+            "X2": float(inp_x2),
+            "Y":  float(inp_y),
+        }])
+        st.session_state.train_df = _safe_concat(st.session_state.train_df, new_row)
         st.success("Рядок успішно додано!")
         st.rerun()
 
@@ -110,42 +137,40 @@ with st.sidebar:
             if len(df_file.columns) >= 3:
                 df_file = df_file.iloc[:, :3].copy()
                 df_file.columns = ["X1", "X2", "Y"]
-                # Конвертуємо одразу при завантаженні
+                # Примусова конвертація + видалення некоректних рядків
                 for col in ["X1", "X2", "Y"]:
                     df_file[col] = pd.to_numeric(df_file[col], errors='coerce')
                 df_file.dropna(inplace=True)
-                st.session_state.train_df = pd.concat(
-                    [st.session_state.train_df, df_file], ignore_index=True
-                )
-                st.success(f"Завантажено {len(df_file)} рядків!")
+                df_file = df_file.astype(np.float64)
+                n_loaded = len(df_file)
+                st.session_state.train_df = _safe_concat(st.session_state.train_df, df_file)
+                st.success(f"Завантажено {n_loaded} рядків!")
                 st.rerun()
             else:
                 st.error("Файл повинен містити мінімум 3 колонки (X1, X2, Y)")
         except Exception as e:
             st.error(f"Помилка читання файлу: {e}")
 
-    # Секція 3: Керування моделлю
+    # Секція 3: Навчання моделі
     st.subheader("⚙️ Модель")
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
-        if len(st.session_state.train_df) < 6:
-            st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {len(st.session_state.train_df)})")
+        n = len(st.session_state.train_df)
+        if n < 6:
+            st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {n})")
         else:
             try:
-                x1 = to_float_array(st.session_state.train_df["X1"])
-                x2 = to_float_array(st.session_state.train_df["X2"])
-                y  = to_float_array(st.session_state.train_df["Y"])
-
-                A = _design_matrix(x1, x2)
-                c = ridge_regression(A, y, alpha=0.01)
+                x1, x2, y = _to_float64(st.session_state.train_df, ["X1", "X2", "Y"])
+                A  = _design_matrix(x1, x2)
+                c  = ridge_regression(A, y, alpha=0.01)
                 _, _, r2, rmse = evaluate_model(x1, x2, y, c)
 
-                st.session_state.coeffs = c
-                st.session_state.metrics["R2"]   = f"{r2:.4f}"
-                st.session_state.metrics["RMSE"] = f"{rmse:.4f}"
+                st.session_state.coeffs           = c
+                st.session_state.metrics["R2"]    = f"{r2:.4f}"
+                st.session_state.metrics["RMSE"]  = f"{rmse:.4f}"
                 st.success("Модель успішно навчено!")
                 st.rerun()
             except ValueError:
-                st.error("Помилка даних: Перевірте, чи таблиця не містить тексту або порожніх клітинок!")
+                st.error("Помилка даних: таблиця містить нечислові або порожні значення!")
             except np.linalg.LinAlgError as e:
                 st.error(f"Помилка лінійної алгебри: {e}")
             except Exception as e:
@@ -159,20 +184,18 @@ with st.sidebar:
         else:
             y_pred_val = calculate_Y_physical(inp_x1, inp_x2, st.session_state.coeffs)
             new_pred = pd.DataFrame([{
-                "X1": float(inp_x1),
-                "X2": float(inp_x2),
-                "Y_predicted": round(y_pred_val, 4)
+                "X1":          float(inp_x1),
+                "X2":          float(inp_x2),
+                "Y_predicted": round(y_pred_val, 4),
             }])
-            st.session_state.pred_df = pd.concat(
-                [st.session_state.pred_df, new_pred], ignore_index=True
-            )
+            st.session_state.pred_df = _safe_concat(st.session_state.pred_df, new_pred)
             st.toast(f"Прогноз готовий: Y = {y_pred_val:.4f}", icon="🔮")
             st.rerun()
 
     st.markdown("---")
     if st.button("🗑 Очистити всі дані", type="secondary", use_container_width=True):
-        st.session_state.train_df = pd.DataFrame(columns=["X1", "X2", "Y"])
-        st.session_state.pred_df  = pd.DataFrame(columns=["X1", "X2", "Y_predicted"])
+        st.session_state.train_df = _make_empty_train_df()
+        st.session_state.pred_df  = _make_empty_pred_df()
         st.session_state.coeffs   = None
         st.session_state.metrics  = {"R2": "—", "RMSE": "—"}
         st.toast("Всі дані скинуто", icon="🗑")
@@ -184,13 +207,13 @@ with st.sidebar:
 
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 with col_m1:
-    st.metric("R²", st.session_state.metrics["R2"])
+    st.metric("R²",          st.session_state.metrics["R2"])
 with col_m2:
-    st.metric("RMSE", st.session_state.metrics["RMSE"])
+    st.metric("RMSE",        st.session_state.metrics["RMSE"])
 with col_m3:
     st.metric("Навч. точок", len(st.session_state.train_df))
 with col_m4:
-    st.metric("Прогнозів", len(st.session_state.pred_df))
+    st.metric("Прогнозів",   len(st.session_state.pred_df))
 
 st.markdown("### 📋 Коефіцієнти моделі")
 if st.session_state.coeffs is not None:
@@ -231,17 +254,17 @@ with tab_data:
 
             for ci, h in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=ci, value=h)
-                cell.fill = hdr_fill
-                cell.font = hdr_font
+                cell.fill      = hdr_fill
+                cell.font      = hdr_font
                 cell.alignment = Alignment(horizontal="center")
-                cell.border = brd
+                cell.border    = brd
                 ws.column_dimensions[cell.column_letter].width = 18
 
             for ri, row in enumerate(st.session_state.pred_df.itertuples(), 2):
                 for ci, v in enumerate([row.X1, row.X2, row.Y_predicted], 1):
-                    cell = ws.cell(row=ri, column=ci, value=v)
+                    cell           = ws.cell(row=ri, column=ci, value=v)
                     cell.alignment = Alignment(horizontal="center")
-                    cell.border = brd
+                    cell.border    = brd
 
             wb.save(buffer)
             buffer.seek(0)
@@ -259,11 +282,8 @@ with tab_plots:
     if st.session_state.coeffs is None:
         st.info("Будь ласка, завантажте дані та навчіть модель для побудови графіків.")
     else:
-        # ВИПРАВЛЕННЯ: безпечна конвертація даних у float64
         try:
-            x1 = to_float_array(st.session_state.train_df["X1"])
-            x2 = to_float_array(st.session_state.train_df["X2"])
-            y  = to_float_array(st.session_state.train_df["Y"])
+            x1, x2, y = _to_float64(st.session_state.train_df, ["X1", "X2", "Y"])
         except Exception as e:
             st.error(f"Помилка читання даних для графіків: {e}")
             st.stop()
@@ -279,8 +299,8 @@ with tab_plots:
         fig, ax = plt.subplots(figsize=(10, 5))
 
         if plot_type == "Exp vs Predicted (Адекватність)":
-            ax.scatter(y, y_pred, color="#2EE59D", s=80, zorder=5, alpha=0.9,
-                       edgecolors="#5FFFC0", label="Точки")
+            ax.scatter(y, y_pred, color="#2EE59D", s=80, zorder=5,
+                       alpha=0.9, edgecolors="#5FFFC0", label="Точки")
             mn = min(y.min(), y_pred.min())
             mx = max(y.max(), y_pred.max())
             ax.plot([mn, mx], [mn, mx], color="#A3FF6F", lw=2, ls="--", label="Ідеал y=x")
@@ -290,8 +310,8 @@ with tab_plots:
             ax.legend()
 
         elif plot_type == "Аналіз залишків":
-            ax.scatter(y_pred, residuals, color="#2EE59D", s=80, alpha=0.9,
-                       edgecolors="#5FFFC0")
+            ax.scatter(y_pred, residuals, color="#2EE59D", s=80,
+                       alpha=0.9, edgecolors="#5FFFC0")
             ax.axhline(0, color="#A3FF6F", lw=2, ls="--")
             ax.set_xlabel("Прогнозовані Y")
             ax.set_ylabel("Залишки (Y_exp − Y_pred)")
@@ -304,30 +324,31 @@ with tab_plots:
                     "Будь ласка, зробіть кілька прогнозів у сайдбарі."
                 )
             else:
-                # ВИПРАВЛЕННЯ: конвертуємо pred_df колонки у float перед сортуванням
-                df_p = st.session_state.pred_df.copy()
-                df_p["X1"] = pd.to_numeric(df_p["X1"], errors='coerce')
-                df_p["X2"] = pd.to_numeric(df_p["X2"], errors='coerce')
-                df_p["Y_predicted"] = pd.to_numeric(df_p["Y_predicted"], errors='coerce')
-                df_p.dropna(inplace=True)
-                df_p = df_p.sort_values("X2")
+                try:
+                    df_p = st.session_state.pred_df.copy()
+                    df_p["X1"]          = pd.to_numeric(df_p["X1"],          errors='coerce')
+                    df_p["X2"]          = pd.to_numeric(df_p["X2"],          errors='coerce')
+                    df_p["Y_predicted"] = pd.to_numeric(df_p["Y_predicted"], errors='coerce')
+                    df_p.dropna(inplace=True)
+                    df_p = df_p.sort_values("X2").reset_index(drop=True)
 
-                palette = ["#2EE59D", "#A3FF6F", "#5BC8FF", "#FFD166", "#FF5C7A"]
+                    # Округлення X1 для стабільного групування (уникаємо float-дублів)
+                    df_p["_x1_key"] = df_p["X1"].round(6)
+                    unique_x1 = sorted(df_p["_x1_key"].unique())
+                    palette   = ["#2EE59D", "#A3FF6F", "#5BC8FF", "#FFD166", "#FF5C7A"]
 
-                # ВИПРАВЛЕННЯ: округлюємо X1 для коректного групування (уникаємо float-дублів)
-                df_p["X1_rounded"] = df_p["X1"].round(6)
-                unique_x1 = sorted(df_p["X1_rounded"].unique())
-
-                for ci, x1_val in enumerate(unique_x1):
-                    sub = df_p[df_p["X1_rounded"] == x1_val]
-                    color = palette[ci % len(palette)]
-                    ax.plot(sub["X2"], sub["Y_predicted"],
-                            marker="o", color=color, linewidth=2.2,
-                            label=f"X₁={x1_val:.4g}")
-                ax.set_xlabel("X₂")
-                ax.set_ylabel("Y (прогноз)")
-                ax.set_title("Прогнозні значення моделі")
-                ax.legend()
+                    for ci, x1_val in enumerate(unique_x1):
+                        sub   = df_p[df_p["_x1_key"] == x1_val]
+                        color = palette[ci % len(palette)]
+                        ax.plot(sub["X2"], sub["Y_predicted"],
+                                marker="o", color=color, linewidth=2.2,
+                                label=f"X₁={x1_val:.4g}")
+                    ax.set_xlabel("X₂")
+                    ax.set_ylabel("Y (прогноз)")
+                    ax.set_title("Прогнозні значення моделі")
+                    ax.legend()
+                except Exception as e:
+                    st.error(f"Помилка побудови графіку прогнозів: {e}")
 
         fig.tight_layout()
         st.pyplot(fig)
