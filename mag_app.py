@@ -20,21 +20,28 @@ st.set_page_config(
 #  МАТЕМАТИЧНА МОДЕЛЬ
 # ══════════════════════════════════════════════════════════
 
+# Масштабний коефіцієнт для X2: нормуємо X2 → X2/X2_SCALE всередині моделі,
+# щоб стовпці матриці були одного порядку та МНК був чисельно стабільним.
+X2_SCALE = 100.0
+
 def _design_matrix(x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
-    """Матриця ознак: 6 базисних функцій."""
+    """Матриця ознак: 6 базисних функцій.
+    X2 нормується на X2_SCALE для чисельної стабільності."""
+    z2 = x2 / X2_SCALE
     return np.column_stack([
-        x1 * (x2**2),    # F1
-        x1 * x2,         # F2
-        x2**2,           # F3
+        x1 * (z2**2),    # F1
+        x1 * z2,         # F2
+        z2**2,           # F3
         x1,              # F4
-        x2,              # F5
+        z2,              # F5
         np.ones_like(x1) # F6
     ])
 
-def ridge_regression(A: np.ndarray, y: np.ndarray, alpha: float = 0.01) -> np.ndarray:
-    """Стабільний Ridge МНК: θ = (AᵀA + αI)⁻¹ Aᵀy."""
-    I = np.eye(A.shape[1])
-    return np.linalg.inv(A.T @ A + alpha * I) @ A.T @ y
+def lstsq_regression(A: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Точний МНК через SVD (numpy lstsq): θ = argmin‖Aθ − y‖².
+    Чисельно стабільний, не потребує ручного підбору lambda."""
+    coeffs, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+    return coeffs
 
 def evaluate_model(x1, x2, y_true, coeffs):
     """Оцінка моделі — R² та RMSE."""
@@ -49,13 +56,14 @@ def evaluate_model(x1, x2, y_true, coeffs):
 
 def calculate_Y_physical(x1: float, x2: float, coeffs: np.ndarray) -> float:
     """Прогноз одного значення."""
+    z2 = x2 / X2_SCALE
     F1, F2, F3, F4, F5, F6 = coeffs
     return (
-        F1 * x1 * (x2**2) +
-        F2 * x1 * x2 +
-        F3 * (x2**2) +
+        F1 * x1 * (z2**2) +
+        F2 * x1 * z2 +
+        F3 * (z2**2) +
         F4 * x1 +
-        F5 * x2 +
+        F5 * z2 +
         F6
     )
 
@@ -105,7 +113,7 @@ if "metrics" not in st.session_state:
 # ══════════════════════════════════════════════════════════
 with st.sidebar:
     st.title("🌿 MagneticIE Pro")
-    st.caption("Ridge Regression Engine · Магнітна активація")
+    st.caption("Least Squares Engine · Магнітна активація")
     st.markdown("---")
 
     # Секція 1: Введення даних вручну
@@ -161,7 +169,7 @@ with st.sidebar:
             try:
                 x1, x2, y = _to_float64(st.session_state.train_df, ["X1", "X2", "Y"])
                 A  = _design_matrix(x1, x2)
-                c  = ridge_regression(A, y, alpha=0.01)
+                c  = lstsq_regression(A, y)
                 _, _, r2, rmse = evaluate_model(x1, x2, y, c)
 
                 st.session_state.coeffs           = c
@@ -223,6 +231,7 @@ if st.session_state.coeffs is not None:
         f"F₄={c[3]:.6e}   F₅={c[4]:.6e}   F₆={c[5]:.6e}",
         language="text"
     )
+    st.caption(f"⚠️ Коефіцієнти F₁–F₃, F₅ відповідають моделі з X₂ нормованим на {X2_SCALE:.0f} (X₂/100).")
 else:
     st.info("Модель не навчена")
 
