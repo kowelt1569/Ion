@@ -163,36 +163,20 @@ with st.sidebar:
     st.subheader("⚙️ Модель")
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
         n = len(st.session_state.train_df)
-
-    if n < 3:
-        st.error(
-        f"Недостатньо експериментальних даних для побудови моделі "
-        f"(зараз: {n}). Необхідно щонайменше 3 точки."
-        )
-
-    else:
-
         if n < 6:
-            st.info(
-                "Кількість експериментальних точок менша за кількість "
-                "коефіцієнтів моделі. "
-                "Коефіцієнти визначаються методом найменших квадратів "
-                "із використанням псевдооберненого розв'язку "
-                "(numpy.linalg.lstsq)."
-            )
+            st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {n})")
+        else:
+            try:
+                x1, x2, y = _to_float64(st.session_state.train_df, ["X1", "X2", "Y"])
+                A  = _design_matrix(x1, x2)
+                c  = lstsq_regression(A, y)
+                _, _, r2, rmse = evaluate_model(x1, x2, y, c)
 
-        x1, x2, y = _to_float64(st.session_state.train_df)
-
-        A = _design_matrix(x1, x2)
-
-        c = lstsq_regression(A, y)
-        _, _, r2, rmse = evaluate_model(x1, x2, y, c)
-
-        st.session_state.coeffs           = c
-        st.session_state.metrics["R2"]    = f"{r2:.4f}"
-        st.session_state.metrics["RMSE"]  = f"{rmse:.4f}"
-        st.success("Модель успішно навчено!")
-        st.rerun()
+                st.session_state.coeffs           = c
+                st.session_state.metrics["R2"]    = f"{r2:.4f}"
+                st.session_state.metrics["RMSE"]  = f"{rmse:.4f}"
+                st.success("Модель успішно навчено!")
+                st.rerun()
             except ValueError:
                 st.error("Помилка даних: таблиця містить нечислові або порожні значення!")
             except np.linalg.LinAlgError as e:
