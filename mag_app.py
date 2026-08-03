@@ -164,7 +164,7 @@ with st.sidebar:
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
         n = len(st.session_state.train_df)
         if n < 3:
-            st.(
+            st.
                 f"Недостатньо експериментальних даних для побудови моделі "
                   f"(зараз: {n}). Необхідно щонайменше 3 точки."
             )
