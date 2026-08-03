@@ -163,7 +163,7 @@ with st.sidebar:
     st.subheader("⚙️ Модель")
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
         n = len(st.session_state.train_df)
-        if n < 6:
+        if n < 5:
             st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {n})")
         else:
             try:
