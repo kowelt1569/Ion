@@ -164,7 +164,7 @@ with st.sidebar:
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
         n = len(st.session_state.train_df)
         if n < 5:
-            st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {n})")
+            st.warning(f"Потрібно ≥5 тренувальних точок (зараз: {n})")
         else:
             try:
                 x1, x2, y = _to_float64(st.session_state.train_df, ["X1", "X2", "Y"])
