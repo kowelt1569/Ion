@@ -192,7 +192,7 @@ with st.sidebar:
         st.session_state.metrics["R2"]    = f"{r2:.4f}"
         st.session_state.metrics["RMSE"]  = f"{rmse:.4f}"
         st.success("Модель успішно навчено!")
-                st.rerun()
+        st.rerun()
             except ValueError:
                 st.error("Помилка даних: таблиця містить нечислові або порожні значення!")
             except np.linalg.LinAlgError as e:
