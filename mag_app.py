@@ -163,9 +163,19 @@ with st.sidebar:
     st.subheader("⚙️ Модель")
     if st.button("⚡ Навчити модель", type="primary", use_container_width=True):
         n = len(st.session_state.train_df)
-        if n < 6:
-            st.warning(f"Потрібно ≥6 тренувальних точок (зараз: {n})")
+        if n < 3:
+            st.(
+                f"Недостатньо експериментальних даних для побудови моделі "
+                  f"(зараз: {n}). Необхідно щонайменше 3 точки."
+            )
         else:
+        if n < 5:
+            st.(
+                "Кількість експериментальних точок менша за кількість "
+                "коефіцієнтів моделі. "
+                "Коефіцієнти визначаються методом найменших квадратів "
+                "за допомогою функції numpy.linalg.lstsq()."
+            ) 
             try:
                 x1, x2, y = _to_float64(st.session_state.train_df, ["X1", "X2", "Y"])
                 A  = _design_matrix(x1, x2)
