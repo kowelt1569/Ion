@@ -188,9 +188,9 @@ with st.sidebar:
         c = lstsq_regression(A, y)
         _, _, r2, rmse = evaluate_model(x1, x2, y, c)
 
-                st.session_state.coeffs           = c
-                st.session_state.metrics["R2"]    = f"{r2:.4f}"
-                st.session_state.metrics["RMSE"]  = f"{rmse:.4f}"
+        st.session_state.coeffs           = c
+        st.session_state.metrics["R2"]    = f"{r2:.4f}"
+        st.session_state.metrics["RMSE"]  = f"{rmse:.4f}"
                 st.success("Модель успішно навчено!")
                 st.rerun()
             except ValueError:
